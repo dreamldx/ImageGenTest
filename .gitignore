@@ -6,3 +6,7 @@ data/*.sqlite3-shm
 __pycache__/
 *.pyc
 .idea/
+
+# Generated deployment artifacts (see Makefile)
+/update.sh
+/imagegentest.service
