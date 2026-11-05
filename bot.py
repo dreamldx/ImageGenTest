@@ -17,10 +17,11 @@ from typing import Any
 
 import discord
 
+import llm
 import persistent
 from channel import discord as discord_channel
 from gen import fal
-from llm import openrouter, tools
+from llm import openai_compat, tools
 
 AGENT_SYSTEM_PROMPT = (
     "You are a helpful Discord assistant that can generate and edit images. "
@@ -178,7 +179,8 @@ async def handle_prompt(message: discord.Message, prompt: str) -> None:
 
     async with thread.typing():
         try:
-            final_message = await openrouter.run_with_tools(
+            final_message = await openai_compat.run_with_tools(
+                llm.get_provider(),
                 conversation,
                 tools=tools.get_tools(),
                 tool_handlers=tools.TOOL_HANDLERS,
