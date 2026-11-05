@@ -1,9 +1,9 @@
-"""fal.ai client for text-to-image generation.
+"""fal.ai client for text-to-image generation and image editing.
 
 Reads the API key from the ``FAL_KEY`` environment variable (see ``.env``)
 — the same name the official ``fal_client`` SDK itself looks for — and
 exposes a small wrapper around ``fal_client`` for submitting text-to-image
-jobs.
+and image-editing jobs.
 """
 
 import os
@@ -18,6 +18,10 @@ dotenv.load_dotenv()
 FAL_KEY = os.getenv("FAL_KEY")
 
 DEFAULT_MODEL = "blackforestlabs/flux-3/klein/text-to-image"
+
+# Same model family as DEFAULT_MODEL, but for editing/composing from up to
+# 10 reference images instead of generating from scratch.
+DEFAULT_EDIT_MODEL = "blackforestlabs/flux-3/klein/edit-image"
 
 MODELS_API_URL = "https://api.fal.ai/v1/models"
 
@@ -112,6 +116,15 @@ def get_model() -> str:
     return DEFAULT_MODEL
 
 
+def get_edit_model() -> str:
+    """Return the fal.ai model currently used as the default for
+    `edit_image` (i.e. when a caller doesn't pass an explicit `model`).
+
+    See :func:`get_model`'s docstring re why this indirection exists.
+    """
+    return DEFAULT_EDIT_MODEL
+
+
 def _get_client() -> fal_client.SyncClient:
     if not FAL_KEY:
         raise RuntimeError("FAL_KEY is not set in the environment (.env)")
@@ -188,6 +201,84 @@ async def generate_image_async(
         model,
         arguments={
             "prompt": prompt,
+            "image_size": image_size,
+            "num_images": num_images,
+            "enable_prompt_expansion": enable_prompt_expansion,
+            "enable_safety_checker": enable_safety_checker,
+            **extra_arguments,
+        },
+        with_logs=True,
+        on_queue_update=_on_queue_update,
+    )
+    return result
+
+
+def edit_image(
+    prompt: str,
+    image_urls: list[str],
+    *,
+    model: str | None = None,
+    image_size: str = "square_hd",
+    num_images: int = 1,
+    enable_prompt_expansion: bool = False,
+    enable_safety_checker: bool = False,
+    **extra_arguments: Any,
+) -> dict:
+    """Edit or compose from up to 10 reference images using a fal.ai
+    image-editing model.
+
+    `model` defaults to the *current* `DEFAULT_EDIT_MODEL` (re-read on every
+    call; see :func:`generate_image`'s docstring for why). `image_urls` must
+    be non-empty — this is an editing call, so it always needs at least one
+    reference image to edit or compose from.
+
+    Returns the raw JSON result from fal.ai, which includes an ``images``
+    list with ``url`` entries pointing to the generated images.
+    """
+    if not image_urls:
+        raise ValueError("edit_image requires at least one reference image URL")
+    model = model or DEFAULT_EDIT_MODEL
+    client = _get_client()
+    result = client.subscribe(
+        model,
+        arguments={
+            "prompt": prompt,
+            "image_urls": image_urls,
+            "image_size": image_size,
+            "num_images": num_images,
+            "enable_prompt_expansion": enable_prompt_expansion,
+            "enable_safety_checker": enable_safety_checker,
+            **extra_arguments,
+        },
+        with_logs=True,
+        on_queue_update=_on_queue_update,
+    )
+    return result
+
+
+async def edit_image_async(
+    prompt: str,
+    image_urls: list[str],
+    *,
+    model: str | None = None,
+    image_size: str = "square_hd",
+    num_images: int = 1,
+    enable_prompt_expansion: bool = False,
+    enable_safety_checker: bool = False,
+    **extra_arguments: Any,
+) -> dict:
+    """Async version of :func:`edit_image`; see its docstring."""
+    if not image_urls:
+        raise ValueError("edit_image requires at least one reference image URL")
+    model = model or DEFAULT_EDIT_MODEL
+    if not FAL_KEY:
+        raise RuntimeError("FAL_KEY is not set in the environment (.env)")
+    client = fal_client.AsyncClient(key=FAL_KEY)
+    result = await client.subscribe(
+        model,
+        arguments={
+            "prompt": prompt,
+            "image_urls": image_urls,
             "image_size": image_size,
             "num_images": num_images,
             "enable_prompt_expansion": enable_prompt_expansion,

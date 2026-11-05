@@ -110,7 +110,10 @@ async def on_message(message: discord.Message):
     if bot.user is not None:
         prompt = prompt.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "")
     prompt = prompt.strip()
-    if not prompt:
+    # A caption-less image upload (e.g. "edit this" via attachment alone)
+    # should still go through — only bail out if there's neither text nor
+    # an image attachment to act on.
+    if not prompt and not extract_image_attachment_urls(message):
         return
 
     # A top-level channel message starts a new thread; a message posted
@@ -133,6 +136,20 @@ async def resolve_thread(message: discord.Message, name: str) -> discord.Thread:
     if isinstance(message.channel, discord.Thread):
         return message.channel
     return await create_thread(message, name)
+
+
+def extract_image_attachment_urls(message: discord.Message) -> list[str]:
+    """Return the URLs of any image attachments on `message`.
+
+    Discord attachment URLs are plain public CDN links, so these can be fed
+    straight to fal.ai (e.g. as `edit_image`'s `image_urls`) without any
+    extra upload step.
+    """
+    return [
+        attachment.url
+        for attachment in message.attachments
+        if (attachment.content_type or "").startswith("image/")
+    ]
 
 
 async def reply_with_images(thread: discord.Thread, image_urls: list[str]) -> None:
