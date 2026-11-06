@@ -15,6 +15,21 @@ image_uploader: ContextVar[Callable[[list[str]], Awaitable[list[str]]] | None] =
 )
 
 
+def _provider_property() -> dict[str, Any]:
+    return {
+        "type": "string",
+        "description": (
+            "Which image provider to use. \"venice\": uncensored — REQUIRED "
+            "for anything NSFW, adult, or explicit (including editing NSFW "
+            "images), and the choice whenever unsure. \"fal\": highest "
+            "quality, but must never be used for NSFW prompts or NSFW "
+            "source images — only for requests that are clearly safe for work."
+        ),
+        "enum": list(gen.PROVIDERS),
+        "default": gen.get_provider_name(),
+    }
+
+
 def _build_generate_image_tool() -> dict[str, Any]:
     return {
         "type": "function",
@@ -31,6 +46,7 @@ def _build_generate_image_tool() -> dict[str, Any]:
                         "type": "string",
                         "description": "A detailed text-to-image prompt describing the desired image.",
                     },
+                    "provider": _provider_property(),
                     "image_size": {
                         "type": "string",
                         "description": "Output image aspect ratio/size preset.",
@@ -94,6 +110,7 @@ def _build_edit_image_tool() -> dict[str, Any]:
                         ),
                         "minItems": 1,
                     },
+                    "provider": _provider_property(),
                     "image_size": {
                         "type": "string",
                         "description": "Output image aspect ratio/size preset.",
@@ -126,6 +143,13 @@ def get_tools() -> list[dict[str, Any]]:
     return [_build_generate_image_tool(), _build_edit_image_tool()]
 
 
+def _pop_provider(arguments: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+    """Split the LLM's chosen `provider` (default: `$IMAGE_PROVIDER`) off the
+    tool arguments, returning the provider module and the remaining ones."""
+    provider = gen.get_provider(arguments.get("provider"))
+    return provider, {key: value for key, value in arguments.items() if key != "provider"}
+
+
 async def _image_result(result: dict[str, Any]) -> dict[str, Any]:
     urls = [image["url"] for image in result.get("images", [])]
     uploader = image_uploader.get()
@@ -137,7 +161,7 @@ async def _image_result(result: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _generate_image(arguments: dict[str, Any]) -> dict[str, Any]:
-    provider = gen.get_provider()
+    provider, arguments = _pop_provider(arguments)
     prompt = arguments["prompt"]
     # The LLM must not choose the model: drop any `model` it passes anyway
     # so the provider falls back to its configured default.
@@ -149,7 +173,7 @@ async def _generate_image(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _edit_image(arguments: dict[str, Any]) -> dict[str, Any]:
-    provider = gen.get_provider()
+    provider, arguments = _pop_provider(arguments)
     prompt = arguments["prompt"]
     image_urls = arguments.get("image_urls") or []
     if not image_urls:
