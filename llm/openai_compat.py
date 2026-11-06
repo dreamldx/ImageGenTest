@@ -12,6 +12,8 @@ from typing import Any, Awaitable, Callable, Optional
 
 import httpx
 
+from requestlog import log_request
+
 
 @dataclass(frozen=True)
 class Provider:
@@ -71,13 +73,15 @@ def chat_completion(
     **extra_arguments: Any,
 ) -> dict[str, Any]:
     """Call the provider's chat-completions endpoint, returning the raw JSON."""
-    response = httpx.post(
-        provider.chat_completions_url,
-        headers=provider.headers(),
-        json=request_body(provider, messages, model=model, temperature=temperature, tools=tools, **extra_arguments),
-        timeout=60.0,
-    )
-    response.raise_for_status()
+    body = request_body(provider, messages, model=model, temperature=temperature, tools=tools, **extra_arguments)
+    with log_request("llm", provider.name, body["model"]):
+        response = httpx.post(
+            provider.chat_completions_url,
+            headers=provider.headers(),
+            json=body,
+            timeout=60.0,
+        )
+        response.raise_for_status()
     return response.json()
 
 
@@ -91,13 +95,15 @@ async def chat_completion_async(
     **extra_arguments: Any,
 ) -> dict[str, Any]:
     """Async version of :func:`chat_completion`."""
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            provider.chat_completions_url,
-            headers=provider.headers(),
-            json=request_body(provider, messages, model=model, temperature=temperature, tools=tools, **extra_arguments),
-        )
-    response.raise_for_status()
+    body = request_body(provider, messages, model=model, temperature=temperature, tools=tools, **extra_arguments)
+    with log_request("llm", provider.name, body["model"]):
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                provider.chat_completions_url,
+                headers=provider.headers(),
+                json=body,
+            )
+        response.raise_for_status()
     return response.json()
 
 

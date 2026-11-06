@@ -13,6 +13,8 @@ import dotenv
 import fal_client
 import httpx
 
+from requestlog import log_request
+
 dotenv.load_dotenv()
 
 FAL_KEY = os.getenv("FAL_KEY")
@@ -165,19 +167,20 @@ def generate_image(
     """
     model = model or DEFAULT_MODEL
     client = _get_client()
-    result = client.subscribe(
-        model,
-        arguments={
-            "prompt": prompt,
-            "image_size": image_size,
-            "num_images": num_images,
-            "enable_prompt_expansion": enable_prompt_expansion,
-            "enable_safety_checker": enable_safety_checker,
-            **extra_arguments,
-        },
-        with_logs=True,
-        on_queue_update=_on_queue_update,
-    )
+    with log_request("image.generate", "fal", model):
+        result = client.subscribe(
+            model,
+            arguments={
+                "prompt": prompt,
+                "image_size": image_size,
+                "num_images": num_images,
+                "enable_prompt_expansion": enable_prompt_expansion,
+                "enable_safety_checker": enable_safety_checker,
+                **extra_arguments,
+            },
+            with_logs=True,
+            on_queue_update=_on_queue_update,
+        )
     return result
 
 
@@ -197,19 +200,20 @@ async def generate_image_async(
     if not FAL_KEY:
         raise RuntimeError("FAL_KEY is not set in the environment (.env)")
     client = fal_client.AsyncClient(key=FAL_KEY)
-    result = await client.subscribe(
-        model,
-        arguments={
-            "prompt": prompt,
-            "image_size": image_size,
-            "num_images": num_images,
-            "enable_prompt_expansion": enable_prompt_expansion,
-            "enable_safety_checker": enable_safety_checker,
-            **extra_arguments,
-        },
-        with_logs=True,
-        on_queue_update=_on_queue_update,
-    )
+    with log_request("image.generate", "fal", model):
+        result = await client.subscribe(
+            model,
+            arguments={
+                "prompt": prompt,
+                "image_size": image_size,
+                "num_images": num_images,
+                "enable_prompt_expansion": enable_prompt_expansion,
+                "enable_safety_checker": enable_safety_checker,
+                **extra_arguments,
+            },
+            with_logs=True,
+            on_queue_update=_on_queue_update,
+        )
     return result
 
 
@@ -239,20 +243,21 @@ def edit_image(
         raise ValueError("edit_image requires at least one reference image URL")
     model = model or DEFAULT_EDIT_MODEL
     client = _get_client()
-    result = client.subscribe(
-        model,
-        arguments={
-            "prompt": prompt,
-            "image_urls": image_urls,
-            "image_size": image_size,
-            "num_images": num_images,
-            "enable_prompt_expansion": enable_prompt_expansion,
-            "enable_safety_checker": enable_safety_checker,
-            **extra_arguments,
-        },
-        with_logs=True,
-        on_queue_update=_on_queue_update,
-    )
+    with log_request("image.edit", "fal", model):
+        result = client.subscribe(
+            model,
+            arguments={
+                "prompt": prompt,
+                "image_urls": image_urls,
+                "image_size": image_size,
+                "num_images": num_images,
+                "enable_prompt_expansion": enable_prompt_expansion,
+                "enable_safety_checker": enable_safety_checker,
+                **extra_arguments,
+            },
+            with_logs=True,
+            on_queue_update=_on_queue_update,
+        )
     return result
 
 
@@ -274,20 +279,21 @@ async def edit_image_async(
     if not FAL_KEY:
         raise RuntimeError("FAL_KEY is not set in the environment (.env)")
     client = fal_client.AsyncClient(key=FAL_KEY)
-    result = await client.subscribe(
-        model,
-        arguments={
-            "prompt": prompt,
-            "image_urls": image_urls,
-            "image_size": image_size,
-            "num_images": num_images,
-            "enable_prompt_expansion": enable_prompt_expansion,
-            "enable_safety_checker": enable_safety_checker,
-            **extra_arguments,
-        },
-        with_logs=True,
-        on_queue_update=_on_queue_update,
-    )
+    with log_request("image.edit", "fal", model):
+        result = await client.subscribe(
+            model,
+            arguments={
+                "prompt": prompt,
+                "image_urls": image_urls,
+                "image_size": image_size,
+                "num_images": num_images,
+                "enable_prompt_expansion": enable_prompt_expansion,
+                "enable_safety_checker": enable_safety_checker,
+                **extra_arguments,
+            },
+            with_logs=True,
+            on_queue_update=_on_queue_update,
+        )
     return result
 
 
