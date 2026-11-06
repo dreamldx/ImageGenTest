@@ -152,6 +152,24 @@ def extract_image_attachment_urls(message: discord.Message) -> list[str]:
     ]
 
 
+async def upload_images(thread: discord.Thread, paths: list[str]) -> list[str]:
+    """Upload local image files to the thread and return their Discord CDN
+    URLs, in order. The local copies are deleted once uploaded.
+
+    For providers that return image bytes rather than hosted URLs; the CDN
+    URLs are then used like any other image URL (shown to the LLM, passed
+    back as `edit_image` references). The upload message itself is how the
+    images get shown to the user.
+    """
+    files = [discord.File(path) for path in paths]
+    message = await thread.send(content=f"已生成 {len(paths)} 张图片：", files=files)
+    # Discord keeps the order of `files` in `message.attachments`.
+    urls = [attachment.url for attachment in message.attachments]
+    for path in paths:
+        os.remove(path)
+    return urls
+
+
 async def reply_with_images(thread: discord.Thread, image_urls: list[str]) -> None:
     """Send generated image(s) back into the given thread."""
     if not image_urls:

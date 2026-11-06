@@ -1,10 +1,18 @@
-"""Tool definitions that expose gen/fal to LLMs via OpenRouter's
+"""Tool definitions that expose gen to LLMs via OpenRouter's
 OpenAI-style function/tool calling.
 """
 
-from typing import Any
+from contextvars import ContextVar
+from typing import Any, Awaitable, Callable
 
-from gen import fal
+import gen
+
+# Set by the caller (per request) to turn image refs that aren't http(s) URLs
+# — local files, for providers that return image bytes — into hosted URLs
+# before they reach the LLM and the user. Unset: results are returned as-is.
+image_uploader: ContextVar[Callable[[list[str]], Awaitable[list[str]]] | None] = ContextVar(
+    "image_uploader", default=None
+)
 
 
 def _build_generate_image_tool() -> dict[str, Any]:
@@ -13,7 +21,7 @@ def _build_generate_image_tool() -> dict[str, Any]:
         "function": {
             "name": "generate_image",
             "description": (
-                "Generate one or more images from a text prompt using a fal.ai "
+                "Generate one or more images from a text prompt using a "
                 "text-to-image model. Returns the URLs of the generated images."
             ),
             "parameters": {
@@ -56,7 +64,7 @@ def _build_edit_image_tool() -> dict[str, Any]:
         "function": {
             "name": "edit_image",
             "description": (
-                "Edit or compose from reference image(s) using a fal.ai "
+                "Edit or compose from reference image(s) using an "
                 "image-editing model, following a text instruction. Use this "
                 "instead of generate_image whenever the user wants to modify, "
                 "touch up, restyle, or combine elements into an *existing* "
@@ -118,22 +126,30 @@ def get_tools() -> list[dict[str, Any]]:
     return [_build_generate_image_tool(), _build_edit_image_tool()]
 
 
+async def _image_result(result: dict[str, Any]) -> dict[str, Any]:
+    urls = [image["url"] for image in result.get("images", [])]
+    uploader = image_uploader.get()
+    local_paths = [url for url in urls if not url.startswith(("http://", "https://"))]
+    if uploader is not None and local_paths:
+        uploaded = iter(await uploader(local_paths))
+        urls = [next(uploaded) if url in local_paths else url for url in urls]
+    return {"image_urls": urls, "count": len(urls)}
+
+
 async def _generate_image(arguments: dict[str, Any]) -> dict[str, Any]:
+    provider = gen.get_provider()
     prompt = arguments["prompt"]
     # The LLM must not choose the model: drop any `model` it passes anyway
-    # so fal falls back to its configured default.
+    # so the provider falls back to its configured default.
     extra_arguments = {
         key: value for key, value in arguments.items() if key not in ("prompt", "model")
     }
-    result = await fal.generate_image_async(prompt, **extra_arguments)
-    images = result.get("images", [])
-    return {
-        "image_urls": [image["url"] for image in images],
-        "count": len(images),
-    }
+    result = await provider.generate_image_async(prompt, **extra_arguments)
+    return await _image_result(result)
 
 
 async def _edit_image(arguments: dict[str, Any]) -> dict[str, Any]:
+    provider = gen.get_provider()
     prompt = arguments["prompt"]
     image_urls = arguments.get("image_urls") or []
     if not image_urls:
@@ -141,12 +157,8 @@ async def _edit_image(arguments: dict[str, Any]) -> dict[str, Any]:
     extra_arguments = {
         key: value for key, value in arguments.items() if key not in ("prompt", "image_urls", "model")
     }
-    result = await fal.edit_image_async(prompt, image_urls, **extra_arguments)
-    images = result.get("images", [])
-    return {
-        "image_urls": [image["url"] for image in images],
-        "count": len(images),
-    }
+    result = await provider.edit_image_async(prompt, image_urls, **extra_arguments)
+    return await _image_result(result)
 
 
 # Maps a tool's function name to the async callable that actually runs it.

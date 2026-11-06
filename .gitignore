@@ -10,3 +10,4 @@ __pycache__/
 # Generated deployment artifacts (see Makefile)
 /update.sh
 /imagegentest.service
+data/generated/

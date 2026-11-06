@@ -1,5 +1,5 @@
 """Orchestrator: reads prompts from channel/discord, runs the LLM (with the
-generate_image tool from gen/fal exposed via llm/tools) to answer them, and
+generate_image tool from gen exposed via llm/tools) to answer them, and
 replies with any generated images back through channel/discord.
 
 Chat history is kept in sqlite (persistent/), keyed by the Discord thread's
@@ -17,6 +17,7 @@ from typing import Any
 
 import discord
 
+import gen
 import llm
 import persistent
 from channel import discord as discord_channel
@@ -73,14 +74,18 @@ def _build_dynamic_prompt() -> str:
     # The tools don't expose `model` and call_tool drops any the LLM passes,
     # so these defaults are always what actually gets used.
     now = datetime.now().astimezone()
+    provider = gen.get_provider()
     return (
         f"Current time: {now.isoformat(timespec='seconds')}\n"
-        f"fal.ai default model for generate_image: {fal.get_model()}\n"
-        f"fal.ai default model for edit_image: {fal.get_edit_model()}"
+        f"Image provider: {gen.get_provider_name()}\n"
+        f"Default model for generate_image: {provider.get_model()}\n"
+        f"Default model for edit_image: {provider.get_edit_model()}"
     )
 
 
 async def handle_startup() -> None:
+    if gen.get_provider_name() != "fal":
+        return
     try:
         models = await fal.refresh_models_cache_async()
     except Exception as exc:  # noqa: BLE001 - don't crash startup over the model cache
@@ -166,6 +171,16 @@ async def handle_prompt(message: discord.Message, prompt: str) -> None:
     conversation = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}, *history, llm_user_message]
 
     image_urls: list[str] = []
+    # URLs already shown to the user by the uploader below, so they aren't
+    # posted a second time as embeds at the end.
+    posted_urls: set[str] = set()
+
+    async def upload_images(paths: list[str]) -> list[str]:
+        urls = await discord_channel.upload_images(thread, paths)
+        posted_urls.update(urls)
+        return urls
+
+    tools.image_uploader.set(upload_images)
 
     async def persist(new_message: dict[str, Any]) -> None:
         # Called for every assistant/tool message run_with_tools produces,
@@ -190,5 +205,6 @@ async def handle_prompt(message: discord.Message, prompt: str) -> None:
 
         reply_text = final_message.get("content") or "好了。"
         await thread.send(reply_text)
-        if image_urls:
-            await discord_channel.reply_with_images(thread, image_urls)
+        remaining_urls = [url for url in image_urls if url not in posted_urls]
+        if remaining_urls:
+            await discord_channel.reply_with_images(thread, remaining_urls)
