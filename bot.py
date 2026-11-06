@@ -70,10 +70,8 @@ DYNAMIC_PROMPT_SEPARATOR = "\n---\n"
 
 
 def _build_dynamic_prompt() -> str:
-    # Note: fal.get_model()/get_edit_model() are only the *fallbacks*
-    # generate_image/edit_image use if the tool call omits `model` — the LLM
-    # can still pass a different model id in its tool call, so neither is a
-    # guarantee of what gets used.
+    # The tools don't expose `model` and call_tool drops any the LLM passes,
+    # so these defaults are always what actually gets used.
     now = datetime.now().astimezone()
     return (
         f"Current time: {now.isoformat(timespec='seconds')}\n"

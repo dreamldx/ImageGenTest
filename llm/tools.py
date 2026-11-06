@@ -8,9 +8,6 @@ from gen import fal
 
 
 def _build_generate_image_tool() -> dict[str, Any]:
-    # Built fresh on every call (instead of a frozen module-level literal)
-    # so the advertised default always reflects the *current* `fal.get_model()`
-    # — which can change at runtime — rather than whatever it was at import time.
     return {
         "type": "function",
         "function": {
@@ -25,11 +22,6 @@ def _build_generate_image_tool() -> dict[str, Any]:
                     "prompt": {
                         "type": "string",
                         "description": "A detailed text-to-image prompt describing the desired image.",
-                    },
-                    "model": {
-                        "type": "string",
-                        "description": "fal.ai model endpoint id to use.",
-                        "default": fal.get_model(),
                     },
                     "image_size": {
                         "type": "string",
@@ -94,11 +86,6 @@ def _build_edit_image_tool() -> dict[str, Any]:
                         ),
                         "minItems": 1,
                     },
-                    "model": {
-                        "type": "string",
-                        "description": "fal.ai model endpoint id to use.",
-                        "default": fal.get_edit_model(),
-                    },
                     "image_size": {
                         "type": "string",
                         "description": "Output image aspect ratio/size preset.",
@@ -133,7 +120,11 @@ def get_tools() -> list[dict[str, Any]]:
 
 async def _generate_image(arguments: dict[str, Any]) -> dict[str, Any]:
     prompt = arguments["prompt"]
-    extra_arguments = {key: value for key, value in arguments.items() if key != "prompt"}
+    # The LLM must not choose the model: drop any `model` it passes anyway
+    # so fal falls back to its configured default.
+    extra_arguments = {
+        key: value for key, value in arguments.items() if key not in ("prompt", "model")
+    }
     result = await fal.generate_image_async(prompt, **extra_arguments)
     images = result.get("images", [])
     return {
@@ -148,7 +139,7 @@ async def _edit_image(arguments: dict[str, Any]) -> dict[str, Any]:
     if not image_urls:
         return {"error": "edit_image requires at least one image URL in image_urls"}
     extra_arguments = {
-        key: value for key, value in arguments.items() if key not in ("prompt", "image_urls")
+        key: value for key, value in arguments.items() if key not in ("prompt", "image_urls", "model")
     }
     result = await fal.edit_image_async(prompt, image_urls, **extra_arguments)
     images = result.get("images", [])
