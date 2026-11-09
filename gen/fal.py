@@ -19,11 +19,21 @@ dotenv.load_dotenv()
 
 FAL_KEY = os.getenv("FAL_KEY")
 
-DEFAULT_MODEL = "blackforestlabs/flux-3/klein/text-to-image"
+DEFAULT_MODEL = "bytedance/seedream/v5/pro/text-to-image"
 
 # Same model family as DEFAULT_MODEL, but for editing/composing from up to
 # 10 reference images instead of generating from scratch.
-DEFAULT_EDIT_MODEL = "blackforestlabs/flux-3/klein/edit-image"
+DEFAULT_EDIT_MODEL = "bytedance/seedream/v5/pro/edit"
+
+# Per-model arguments sent on top of the generic ones, for models with
+# knobs the generic set doesn't cover. Seedream (generate and edit) has no
+# `enable_prompt_expansion` (that is silently ignored); its own prompt
+# rewriting is `enhance_prompt_mode`, and since the LLM already expands prompts, use the "fast" mode (cuts
+# generation time, per fal's docs) rather than the default "standard".
+MODEL_ARGUMENTS: dict[str, dict[str, Any]] = {
+    "bytedance/seedream/v5/pro/text-to-image": {"enhance_prompt_mode": "fast"},
+    "bytedance/seedream/v5/pro/edit": {"enhance_prompt_mode": "fast"},
+}
 
 MODELS_API_URL = "https://api.fal.ai/v1/models"
 
@@ -176,6 +186,7 @@ def generate_image(
                 "num_images": num_images,
                 "enable_prompt_expansion": enable_prompt_expansion,
                 "enable_safety_checker": enable_safety_checker,
+                **MODEL_ARGUMENTS.get(model, {}),
                 **extra_arguments,
             },
             with_logs=True,
@@ -209,6 +220,7 @@ async def generate_image_async(
                 "num_images": num_images,
                 "enable_prompt_expansion": enable_prompt_expansion,
                 "enable_safety_checker": enable_safety_checker,
+                **MODEL_ARGUMENTS.get(model, {}),
                 **extra_arguments,
             },
             with_logs=True,
@@ -253,6 +265,7 @@ def edit_image(
                 "num_images": num_images,
                 "enable_prompt_expansion": enable_prompt_expansion,
                 "enable_safety_checker": enable_safety_checker,
+                **MODEL_ARGUMENTS.get(model, {}),
                 **extra_arguments,
             },
             with_logs=True,
@@ -289,6 +302,7 @@ async def edit_image_async(
                 "num_images": num_images,
                 "enable_prompt_expansion": enable_prompt_expansion,
                 "enable_safety_checker": enable_safety_checker,
+                **MODEL_ARGUMENTS.get(model, {}),
                 **extra_arguments,
             },
             with_logs=True,
