@@ -38,9 +38,9 @@ VENICE_API_KEY = os.getenv("VENICE_API_KEY")
 
 VENICE_BASE_URL = "https://api.venice.ai/api/v1"
 
-DEFAULT_MODEL = os.getenv("VENICE_IMAGE_MODEL", "qwen-image-3-pro")
+DEFAULT_MODEL = os.getenv("VENICE_IMAGE_MODEL", "seedream-v5-pro")
 
-DEFAULT_EDIT_MODEL = os.getenv("VENICE_EDIT_MODEL", "qwen-image-3-pro-edit")
+DEFAULT_EDIT_MODEL = os.getenv("VENICE_EDIT_MODEL", "seedream-v5-pro-edit")
 
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "data" / "generated"
 
